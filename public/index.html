@@ -4,11 +4,449 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FHIR JSON to Markdown Converter</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
     <style>
-        /* ... styles as in the original ... */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 40px;
+        }
+
+        .upload-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 2px dashed #dee2e6;
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover {
+            border-color: #667eea;
+            background: #f0f2ff;
+        }
+
+        .upload-area {
+            text-align: center;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-button {
+            background: #667eea;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .upload-button:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+
+        .json-input-section {
+            margin-top: 30px;
+        }
+
+        .json-input {
+            width: 100%;
+            min-height: 200px;
+            padding: 15px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        .convert-button {
+            background: #28a745;
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .convert-button:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .result-section {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .result-header {
+            background: #e9ecef;
+            padding: 15px 20px;
+            border-radius: 8px 8px 0 0;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .copy-button {
+            background: #17a2b8;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .copy-button:hover {
+            background: #138496;
+        }
+
+        .result-content {
+            background: #f8f9fa;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 0 0 8px 8px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .markdown-preview {
+            font-family: 'Georgia', serif;
+            line-height: 1.7;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #f5c6cb;
+            margin-top: 15px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #c3e6cb;
+            margin-top: 15px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            color: #6c757d;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
-    <!-- ... HTML content as in the original ... -->
+    <div class="container">
+        <div class="header">
+            <h1>🏥 FHIR to Markdown Converter</h1>
+            <p>Transform FHIR JSON data into readable Markdown documentation</p>
+        </div>
+
+        <div class="main-content">
+            <div class="tabs">
+                <button class="tab active" data-tab="upload">📁 Upload File</button>
+                <button class="tab" data-tab="paste">📝 Paste JSON</button>
+            </div>
+
+            <div id="upload-tab" class="tab-content active">
+                <div class="upload-section">
+                    <div class="upload-area">
+                        <h3>Upload FHIR JSON File</h3>
+                        <p>Select a FHIR JSON file to convert to Markdown</p>
+                        <input type="file" id="file-input" class="file-input" accept=".json" />
+                        <button class="upload-button" onclick="document.getElementById('file-input').click()">
+                            Choose File
+                        </button>
+                        <div id="file-info"></div>
+                        <button id="convert-file-btn" class="convert-button" style="display: none;">
+                            Convert to Markdown
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="paste-tab" class="tab-content">
+                <div class="json-input-section">
+                    <h3>Paste FHIR JSON Data</h3>
+                    <textarea id="json-input" class="json-input" placeholder="Paste your FHIR JSON data here..."></textarea>
+                    <button id="convert-json-btn" class="convert-button">
+                        Convert to Markdown
+                    </button>
+                </div>
+            </div>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Converting FHIR data to Markdown...</p>
+            </div>
+
+            <div id="result-section" class="result-section">
+                <div class="result-header">
+                    <span>📄 Markdown Output</span>
+                    <button id="copy-button" class="copy-button">Copy to Clipboard</button>
+                </div>
+                <div class="result-content">
+                    <pre id="markdown-output"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab functionality
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                
+                // Remove active class from all tabs and content
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+                
+                // Add active class to clicked tab and corresponding content
+                tab.classList.add('active');
+                document.getElementById(`${tabName}-tab`).classList.add('active');
+            });
+        });
+
+        // File upload handling
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('file-info').innerHTML = `
+                    <div class="success">
+                        <strong>File selected:</strong> ${file.name} (${(file.size / 1024).toFixed(1)} KB)
+                    </div>
+                `;
+                document.getElementById('convert-file-btn').style.display = 'inline-block';
+            }
+        });
+
+        // Convert file
+        document.getElementById('convert-file-btn').addEventListener('click', async function() {
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showError('Please select a file first.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('fhirFile', file);
+
+            showLoading();
+            
+            try {
+                const response = await fetch('/api/convert', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showResult(result.markdown);
+                } else {
+                    showError(result.error || 'Conversion failed');
+                }
+            } catch (error) {
+                showError('Error uploading file: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // Convert JSON
+        document.getElementById('convert-json-btn').addEventListener('click', async function() {
+            const jsonText = document.getElementById('json-input').value.trim();
+            
+            if (!jsonText) {
+                showError('Please paste FHIR JSON data first.');
+                return;
+            }
+
+            let fhirData;
+            try {
+                fhirData = JSON.parse(jsonText);
+            } catch (error) {
+                showError('Invalid JSON format: ' + error.message);
+                return;
+            }
+
+            showLoading();
+
+            try {
+                const response = await fetch('/api/convert-json', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ fhirData })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showResult(result.markdown);
+                } else {
+                    showError(result.error || 'Conversion failed');
+                }
+            } catch (error) {
+                showError('Error converting data: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // Copy to clipboard
+        document.getElementById('copy-button').addEventListener('click', async function() {
+            const markdownOutput = document.getElementById('markdown-output').textContent;
+            
+            try {
+                await navigator.clipboard.writeText(markdownOutput);
+                this.textContent = 'Copied!';
+                setTimeout(() => {
+                    this.textContent = 'Copy to Clipboard';
+                }, 2000);
+            } catch (error) {
+                console.error('Failed to copy to clipboard:', error);
+            }
+        });
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result-section').style.display = 'none';
+            // Clear any previous errors
+            document.querySelectorAll('.error').forEach(el => el.remove());
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showResult(markdown) {
+            document.getElementById('markdown-output').textContent = markdown;
+            document.getElementById('result-section').style.display = 'block';
+            
+            // Scroll to result
+            document.getElementById('result-section').scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start' 
+            });
+        }
+
+        function showError(message) {
+            // Remove any existing error messages
+            document.querySelectorAll('.error').forEach(el => el.remove());
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            
+            // Insert after the active tab content
+            const activeTab = document.querySelector('.tab-content.active');
+            activeTab.appendChild(errorDiv);
+        }
+    </script>
 </body>
 </html> 
