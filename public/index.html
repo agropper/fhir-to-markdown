@@ -254,7 +254,7 @@
                         <h3>Upload FHIR JSON File</h3>
                         <p>Select a FHIR JSON file to convert to Markdown</p>
                         <input type="file" id="file-input" class="file-input" accept=".json" />
-                        <button class="upload-button" onclick="document.getElementById('file-input').click()">
+                        <button id="upload-button" class="upload-button">
                             Choose File
                         </button>
                         <div id="file-info"></div>
@@ -306,6 +306,11 @@
                 tab.classList.add('active');
                 document.getElementById(`${tabName}-tab`).classList.add('active');
             });
+        });
+
+        // File upload button handling
+        document.getElementById('upload-button').addEventListener('click', function() {
+            document.getElementById('file-input').click();
         });
 
         // File upload handling
