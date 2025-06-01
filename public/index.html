@@ -151,6 +151,21 @@
             background: #138496;
         }
 
+        .download-button {
+            background: #28a745;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-left: 10px;
+        }
+
+        .download-button:hover {
+            background: #218838;
+        }
+
         .result-content {
             background: #f8f9fa;
             padding: 20px;
@@ -283,7 +298,10 @@
             <div id="result-section" class="result-section">
                 <div class="result-header">
                     <span>📄 Markdown Output</span>
-                    <button id="copy-button" class="copy-button">Copy to Clipboard</button>
+                    <div>
+                        <button id="copy-button" class="copy-button">Copy to Clipboard</button>
+                        <button id="download-button" class="download-button">💾 Download</button>
+                    </div>
                 </div>
                 <div class="result-content">
                     <pre id="markdown-output"></pre>
@@ -416,6 +434,31 @@
             } catch (error) {
                 console.error('Failed to copy to clipboard:', error);
             }
+        });
+
+        // Download markdown file
+        document.getElementById('download-button').addEventListener('click', function() {
+            const markdownOutput = document.getElementById('markdown-output').textContent;
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+            const filename = `fhir-medical-record-${timestamp}.md`;
+            
+            const blob = new Blob([markdownOutput], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            // Provide feedback
+            const originalText = this.textContent;
+            this.textContent = '✓ Downloaded';
+            setTimeout(() => {
+                this.textContent = originalText;
+            }, 2000);
         });
 
         function showLoading() {
