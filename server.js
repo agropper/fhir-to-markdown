@@ -115,7 +115,10 @@ function convertFHIRToMarkdown(fhirData) {
       Condition: [],
       Medication: [],
       MedicationRequest: [],
-      Encounter: []
+      Encounter: [],
+      DocumentReference: [],
+      DiagnosticReport: [],
+      Binary: []
   };
 
   entries.forEach(entry => {
@@ -145,7 +148,15 @@ function convertFHIRToMarkdown(fhirData) {
   }
 
   if (resourceGroups.Encounter.length > 0) {
-      markdown += formatEncounters(resourceGroups.Encounter);
+      markdown += formatEncounters(resourceGroups.Encounter, resourceGroups.Binary);
+  }
+
+  if (resourceGroups.DiagnosticReport.length > 0) {
+      markdown += formatDiagnosticReports(resourceGroups.DiagnosticReport, resourceGroups.Binary);
+  }
+
+  if (resourceGroups.DocumentReference.length > 0) {
+      markdown += formatDocumentReferences(resourceGroups.DocumentReference, resourceGroups.Binary);
   }
 
   return markdown;
@@ -361,7 +372,7 @@ function formatMedications(medications) {
   return md + '---\n\n';
 }
 
-function formatEncounters(encounters) {
+function formatEncounters(encounters, binaries = []) {
   let md = '## 🏥 Medical Encounters\n\n';
   
   encounters.forEach((encounter, index) => {
@@ -396,9 +407,192 @@ function formatEncounters(encounters) {
       if (encounter.reasonCode && encounter.reasonCode[0] && encounter.reasonCode[0].text) {
           md += `**Reason:** ${encounter.reasonCode[0].text}\n\n`;
       }
+
+      // Notes (narrative text)
+      if (encounter.text && encounter.text.div) {
+          md += `**Clinical Notes:**\n`;
+          md += extractTextFromHtml(encounter.text.div) + '\n\n';
+      }
+
+      // Extensions that might contain notes
+      if (encounter.extension) {
+          encounter.extension.forEach(ext => {
+              if (ext.valueString && ext.url && ext.url.includes('note')) {
+                  md += `**Note:** ${ext.valueString}\n\n`;
+              }
+          });
+      }
+
+      // Check for referenced binary content
+      if (encounter.contained) {
+          encounter.contained.forEach(contained => {
+              if (contained.resourceType === 'Binary' && contained.data) {
+                  md += `**Attached Document:**\n`;
+                  md += decodeBinaryContent(contained) + '\n\n';
+              }
+          });
+      }
   });
   
   return md + '---\n\n';
+}
+
+function formatDiagnosticReports(reports, binaries = []) {
+  let md = '## 🧪 Diagnostic Reports\n\n';
+  
+  reports.forEach((report, index) => {
+      md += `### Report ${index + 1}\n\n`;
+      
+      // Report name
+      if (report.code && report.code.text) {
+          md += `**Report:** ${report.code.text}\n\n`;
+      } else if (report.code && report.code.coding && report.code.coding[0]) {
+          md += `**Report:** ${report.code.coding[0].display || report.code.coding[0].code}\n\n`;
+      }
+      
+      // Status
+      if (report.status) {
+          md += `**Status:** ${report.status}\n\n`;
+      }
+      
+      // Date
+      if (report.effectiveDateTime) {
+          md += `**Date:** ${formatDate(report.effectiveDateTime)}\n\n`;
+      }
+      
+      // Conclusion
+      if (report.conclusion) {
+          md += `**Conclusion:**\n${report.conclusion}\n\n`;
+      }
+      
+      // Text content
+      if (report.text && report.text.div) {
+          md += `**Report Content:**\n`;
+          md += extractTextFromHtml(report.text.div) + '\n\n';
+      }
+
+      // Presented form (binary attachments)
+      if (report.presentedForm) {
+          report.presentedForm.forEach((form, formIndex) => {
+              if (form.data) {
+                  md += `**Attachment ${formIndex + 1}:**\n`;
+                  md += decodeBinaryContent(form) + '\n\n';
+              }
+          });
+      }
+  });
+  
+  return md + '---\n\n';
+}
+
+function formatDocumentReferences(documents, binaries = []) {
+  let md = '## 📄 Documents & Notes\n\n';
+  
+  documents.forEach((doc, index) => {
+      md += `### Document ${index + 1}\n\n`;
+      
+      // Document type
+      if (doc.type && doc.type.text) {
+          md += `**Type:** ${doc.type.text}\n\n`;
+      } else if (doc.type && doc.type.coding && doc.type.coding[0]) {
+          md += `**Type:** ${doc.type.coding[0].display || doc.type.coding[0].code}\n\n`;
+      }
+      
+      // Status
+      if (doc.status) {
+          md += `**Status:** ${doc.status}\n\n`;
+      }
+      
+      // Date
+      if (doc.date) {
+          md += `**Date:** ${formatDate(doc.date)}\n\n`;
+      }
+      
+      // Description
+      if (doc.description) {
+          md += `**Description:** ${doc.description}\n\n`;
+      }
+
+      // Content
+      if (doc.content) {
+          doc.content.forEach((content, contentIndex) => {
+              if (content.attachment) {
+                  const attachment = content.attachment;
+                  
+                  md += `**Content ${contentIndex + 1}:**\n`;
+                  
+                  if (attachment.title) {
+                      md += `*Title:* ${attachment.title}\n`;
+                  }
+                  
+                  if (attachment.contentType) {
+                      md += `*Type:* ${attachment.contentType}\n`;
+                  }
+                  
+                  if (attachment.data) {
+                      md += `*Content:*\n`;
+                      md += decodeBinaryContent(attachment) + '\n\n';
+                  } else if (attachment.url) {
+                      // Try to find referenced binary
+                      const binary = binaries.find(b => attachment.url.includes(b.id));
+                      if (binary && binary.data) {
+                          md += `*Content:*\n`;
+                          md += decodeBinaryContent(binary) + '\n\n';
+                      } else {
+                          md += `*URL:* ${attachment.url}\n\n`;
+                      }
+                  }
+              }
+          });
+      }
+  });
+  
+  return md + '---\n\n';
+}
+
+function extractTextFromHtml(htmlString) {
+  // Simple HTML to text conversion
+  return htmlString
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
+      .replace(/&amp;/g, '&')  // Replace HTML entities
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .trim();
+}
+
+function decodeBinaryContent(binaryResource) {
+  try {
+      if (binaryResource.data) {
+          // Decode base64 content
+          const decoded = Buffer.from(binaryResource.data, 'base64').toString('utf-8');
+          
+          // Check if it's text-like content
+          if (binaryResource.contentType && 
+              (binaryResource.contentType.includes('text') || 
+               binaryResource.contentType.includes('json') ||
+               binaryResource.contentType.includes('xml'))) {
+              return decoded;
+          }
+          
+          // For other content types, check if it looks like readable text
+          if (isReadableText(decoded)) {
+              return decoded;
+          }
+          
+          return `[Binary content - ${binaryResource.contentType || 'unknown type'}]`;
+      }
+      return '[No content available]';
+  } catch (error) {
+      return '[Unable to decode binary content]';
+  }
+}
+
+function isReadableText(text) {
+  // Simple heuristic to check if decoded content is readable text
+  const readableChars = text.match(/[\x20-\x7E\s]/g);
+  return readableChars && readableChars.length / text.length > 0.8;
 }
 
 function calculateAge(birthDate) {
